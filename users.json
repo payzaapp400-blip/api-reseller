@@ -1,0 +1,11 @@
+{
+  "users": {
+    "USER2KEY": {
+      "name": "User 2",
+      "dailyLimit": 500,
+      "expiry": "2026-12-31",
+      "active": true,
+      "createdAt": "2026-10-28"
+    }
+  }
+}

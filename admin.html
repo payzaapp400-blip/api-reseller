@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Trial - Admin Panel</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 20px;
+        }
+        .container { max-width: 1000px; margin: 0 auto; }
+        h1 { color: #38bdf8; margin-bottom: 20px; font-size: 28px; }
+        h2 { color: #94a3b8; margin: 20px 0 10px; font-size: 18px; }
+        .card {
+            background: #1e293b;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border: 1px solid #334155;
+        }
+        .form-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 5px; color: #94a3b8; font-size: 13px; }
+        input {
+            width: 100%;
+            padding: 10px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 8px;
+            color: #e2e8f0;
+            font-size: 14px;
+        }
+        input:focus { outline: none; border-color: #38bdf8; }
+        button {
+            background: #38bdf8;
+            color: #0f172a;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        button:hover { background: #0ea5e9; }
+        button.danger { background: #ef4444; color: white; }
+        button.danger:hover { background: #dc2626; }
+        button.small { padding: 5px 10px; font-size: 12px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid #334155;
+            font-size: 13px;
+        }
+        th { color: #94a3b8; font-weight: 600; }
+        .key { font-family: monospace; color: #38bdf8; }
+        .status-active { color: #22c55e; }
+        .status-disabled { color: #ef4444; }
+        .status-expired { color: #f59e0b; }
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #22c55e;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            display: none;
+            z-index: 1000;
+        }
+        .toast.error { background: #ef4444; }
+        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>API Trial - Admin Panel</h1>
+
+        <div class="card">
+            <h2>Give Trial to User</h2>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>User Name</label>
+                    <input type="text" id="addName" placeholder="e.g. Ramesh">
+                </div>
+                <div class="form-group">
+                    <label>Trial Days (kitne din ka trial)</label>
+                    <input type="number" id="addTrialDays" placeholder="e.g. 3" value="3">
+                </div>
+            </div>
+            <div class="grid-2">
+                <div class="form-group">
+                    <label>Daily Limit (optional, 0 = unlimited)</label>
+                    <input type="number" id="addLimit" placeholder="e.g. 500 (0 for no limit)" value="0">
+                </div>
+                <div class="form-group">
+                    <label>Custom Key (optional, auto-generate if empty)</label>
+                    <input type="text" id="addKey" placeholder="Leave empty for auto key">
+                </div>
+            </div>
+            <button onclick="addUser()">Give Trial</button>
+        </div>
+
+        <div class="card">
+            <h2>Users List</h2>
+            <table id="usersTable">
+                <thead>
+                    <tr>
+                        <th>Name</th>
+                        <th>API Key</th>
+                        <th>Daily Limit</th>
+                        <th>Today Used</th>
+                        <th>Expiry</th>
+                        <th>Status</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="usersBody">
+                    <tr><td colspan="7" style="text-align:center;color:#64748b;">Loading...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="toast" id="toast"></div>
+
+    <script>
+        const ADMIN_PASS = 'admin123'; // Server.js mein same hona chahiye
+
+        function showToast(msg, isError = false) {
+            const toast = document.getElementById('toast');
+            toast.textContent = msg;
+            toast.className = 'toast' + (isError ? ' error' : '');
+            toast.style.display = 'block';
+            setTimeout(() => { toast.style.display = 'none'; }, 3000);
+        }
+
+        async function apiCall(url, method = 'GET', body = null) {
+            const options = {
+                method,
+                headers: { 'x-admin-pass': ADMIN_PASS }
+            };
+            if (body) {
+                options.headers['Content-Type'] = 'application/json';
+                options.body = JSON.stringify(body);
+            }
+            const response = await fetch(url, options);
+            return response.json();
+        }
+
+        async function loadUsers() {
+            const data = await apiCall('/admin/users?admin_pass=' + ADMIN_PASS);
+            const tbody = document.getElementById('usersBody');
+
+            if (!data.success || data.users.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#64748b;">No users yet</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = data.users.map(user => {
+                let statusClass = 'status-active';
+                let statusText = 'Active';
+                if (user.active === false) {
+                    statusClass = 'status-disabled';
+                    statusText = 'Disabled';
+                } else if (user.expiry && user.expiry < new Date().toISOString().split('T')[0]) {
+                    statusClass = 'status-expired';
+                    statusText = 'Expired';
+                }
+
+                return `
+                    <tr>
+                        <td>${user.name}</td>
+                        <td class="key">${user.key}</td>
+                        <td>${user.dailyLimit || 'Unlimited'}</td>
+                        <td>${user.todayUsage}</td>
+                        <td>${user.expiry || 'No expiry'}</td>
+                        <td class="${statusClass}">${statusText}</td>
+                        <td>
+                            <button class="small" onclick="copyLink('${user.key}')">Copy Link</button>
+                            <button class="small danger" onclick="deleteUser('${user.key}')">Delete</button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function addUser() {
+            const name = document.getElementById('addName').value;
+            const trialDays = document.getElementById('addTrialDays').value;
+            const dailyLimit = document.getElementById('addLimit').value;
+            const key = document.getElementById('addKey').value;
+
+            if (!name) {
+                showToast('User Name required!', true);
+                return;
+            }
+
+            const body = { name };
+            if (trialDays) body.trialDays = parseInt(trialDays);
+            if (dailyLimit) body.dailyLimit = parseInt(dailyLimit);
+            if (key) body.key = key;
+
+            const data = await apiCall('/admin/add-user', 'POST', body);
+
+            if (data.success) {
+                showToast('Trial given! Key: ' + data.key);
+                document.getElementById('addName').value = '';
+                document.getElementById('addKey').value = '';
+                loadUsers();
+            } else {
+                showToast(data.error, true);
+            }
+        }
+
+        async function deleteUser(key) {
+            if (!confirm('Delete user ' + key + '?')) return;
+            const data = await apiCall('/admin/delete-user', 'POST', { key });
+            if (data.success) {
+                showToast('User deleted');
+                loadUsers();
+            } else {
+                showToast(data.error, true);
+            }
+        }
+
+        function copyLink(key) {
+            const link = window.location.origin + '/api.php?key=' + key + '&cmd=vehicleinfo&query=VEHICLE_NUMBER';
+            navigator.clipboard.writeText(link).then(() => {
+                showToast('Link copied!');
+            });
+        }
+
+        // Load users on page load
+        loadUsers();
+        setInterval(loadUsers, 30000); // Refresh every 30 seconds
+    </script>
+</body>
+</html>

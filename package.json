@@ -1,0 +1,12 @@
+{
+  "name": "api-reseller",
+  "version": "1.0.0",
+  "description": "Vehicle info API reseller with daily limits",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
+}
